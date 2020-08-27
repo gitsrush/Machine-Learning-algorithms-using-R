@@ -1,0 +1,154 @@
+---
+title: "Regression Notebook"
+output:
+  pdf_document: default
+  html_notebook:
+    theme: spacelab
+  html_document:
+    df_print: paged
+data: '`r Sys.Date()'
+---
+
+```{r}
+pacman::p_load(data.table, forecast, leaps, tidyverse)
+```
+
+```{r readData}
+
+car.df <- read.csv("ToyotaCorolla.csv")
+
+# Use first 1000 rows of data
+car.df <- car.df[1:1000,]
+
+
+# Select variables for regression
+car.df <- car.df[, c(3, 4, 7, 8, 9, 10, 12, 13, 14, 17, 18)]
+
+dim(car.df)
+str(car.df)
+
+mean(car.df$Age_08_04)
+
+summary(car.df$Age_08_04)
+
+summary(car.df)
+
+unique(car.df$Doors) #unique values for doors
+
+car.df[, .N, by= "Doors"]#frequency of cars by doors using data table
+
+table(car.df$Doors) #frequency of cars by doors using data frame
+
+prop.table(table(car.df$Doors)) #proprtions of the above cars
+
+cor(car.df[, -c(4)])
+
+heatmap(cor(car.df[, -c(4)]), Rowv = NA, Colv = NA)
+
+#library(ggplot2)?
+
+#using heatmap.2(cor(car.df[, -c(4)]))
+```
+
+
+
+```{r dataPartition}
+set.seed(123)  
+train.index <- sample(c(1:1000), 600)  
+train.df <- car.df[train.index, ]
+valid.df <- car.df[-train.index, ]
+
+```
+
+```{r Regression}
+car.lm <- lm(Price ~ ., data = train.df)
+
+options(scipen = 999)
+summary(car.lm)
+
+class(car.lm)
+methods(class=class(car.lm))
+confint(car.lm)
+
+par(mfrow = c(2,2))
+plot(car.lm)
+par(mfrow = c(1,1))
+
+```
+
+
+```{r Predictions}
+car.lm.pred <- predict(car.lm, valid.df)
+
+some.residuals <- valid.df$Price[1:20] - car.lm.pred[1:20]
+
+plot(some.residuals, type = "p", pch = 16,
+     col = "blue1",
+     ylab = "Sample Residuals", 
+     ylim = c(-3500, 3500), bty = "n"
+     )
+
+data.frame("Predicted" = car.lm.pred[1:20], "Actual" = valid.df$Price[1:20],
+           "Residual" = some.residuals)
+
+```
+
+
+```{r accuracy}
+accuracy(car.lm.pred, valid.df$Price)
+
+```
+
+**SUBSET SELECTION **  
+**Exhaustive Search **  
+```{r subsetSelection1}
+search <- regsubsets(Price ~ ., data = train.df, nbest = 1, nvmax = dim(train.df)[2],
+                     method = "exhaustive")
+sum <- summary(search)
+
+# show models
+sum$which
+
+# show metrics
+sum$rsq
+sum$adjr2
+sum$cp
+```
+
+
+**Backward Selection **  
+```{r backwardSelect}
+car.lm.bselect <- step(car.lm, direction = "backward")
+summary(car.lm.bselect)  # Which variables were dropped?
+car.lm.bselect.pred <- predict(car.lm.bselect, valid.df)
+accuracy(car.lm.bselect.pred, valid.df$Price)
+
+```
+
+
+
+**Forward Selection **  
+```{r forwardSelect}
+# create model with no predictors
+car.lm.null <- lm(Price~1, data = train.df)
+
+# use step() to run forward regression.
+car.lm.fselect <- step(car.lm.null, scope=list(lower=car.lm.null, upper=car.lm), direction = "forward")
+summary(car.lm.fselect)  # Which variables were added?
+car.lm.fselect.pred <- predict(car.lm.fselect, valid.df)
+accuracy(car.lm.fselect.pred, valid.df$Price)
+
+```
+
+
+
+**Stepwise Regression **  
+```{r Stepwise}
+car.lm.stepwise <- step(car.lm, direction = "both")
+summary(car.lm.stepwise)  # Which variables were dropped/added?
+car.lm.stepwise.pred <- predict(car.lm.stepwise, valid.df)
+accuracy(car.lm.stepwise.pred, valid.df$Price)
+
+```
+
+

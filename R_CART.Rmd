@@ -1,0 +1,123 @@
+---
+title: |
+  | BUAN6356 
+  | CART Notebook
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document:
+    theme: cerulean
+---
+
+```{r loadpackages, warning=FALSE, message=FALSE}
+pacman::p_load(rpart, rpart.plot, caret)
+theme_set(theme_classic())
+options(digits = 3)
+```
+
+__Riding Mowers Data__  
+```{r ClassificationTree}
+
+mower.df <- read.csv("RidingMowers.csv")
+
+# Use rpart.control to specify depth & method to specify classification
+class.tree <- rpart(Ownership ~ ., data = mower.df, 
+                    control = rpart.control(maxdepth = 2), method = "class")
+# plot tree - use prp() for customizing the plot
+prp(class.tree, type = 1, extra = 1, split.font = 2, varlen = -10)  
+rpart.rules(class.tree, cover = TRUE)
+
+```
+
+__Universal Bank Example__   
+```{r}
+
+bank.df <- read.csv("UniversalBank.csv")
+bank.df <- bank.df[ , -c(1, 5)]  # Drop ID and zip code columns
+
+# Create Training and Validation sets
+set.seed(42)  
+train.index <- sample(c(1:dim(bank.df)[1]), dim(bank.df)[1]*0.6)  
+train.df <- bank.df[train.index, ]
+valid.df <- bank.df[-train.index, ]
+
+
+# Generate classification tree
+default.ct <- rpart(Personal.Loan ~ ., data = train.df, method = "class")
+prp(default.ct, type = 1, extra = 1, under = TRUE, split.font = 2, 
+    varlen = -10, box.palette = "BuOr")
+rpart.rules(default.ct, cover = TRUE)
+
+```
+
+
+```{r fullyGrownTree}
+deeper.ct <- rpart(Personal.Loan ~ ., data = train.df, 
+                   method = "class", cp = 0, minsplit = 1) #min no. of obs in each terminal node # cp=0 no penalty to fully gro the tree
+
+length(deeper.ct$frame$var[deeper.ct$frame$var == "<leaf>"])  # count number of leaves
+prp(deeper.ct, type = 0, extra = 1, under = TRUE, split.font = 1, varlen = -10, 
+    box.col=ifelse(deeper.ct$frame$var == "<leaf>", 'skyblue', 'orange'))  
+
+```
+
+
+```{r PerfEval}
+# for Training set
+default.ct.point.pred.train <- predict(default.ct, 
+                                       data = train.df, 
+                                       type = "class")
+confusionMatrix(default.ct.point.pred.train, as.factor(train.df$Personal.Loan))
+
+# for Validation set
+default.ct.point.pred.valid <- predict(default.ct, 
+                                       newdata = valid.df, 
+                                       type = "class")
+confusionMatrix(default.ct.point.pred.valid, as.factor(valid.df$Personal.Loan))
+
+
+```
+
+
+
+```{r bestPrunedTree}
+
+# Complexity Parameters
+    # xval:  # of folds to use in cross-validation procedure
+    # CP: sets the smallest value for the complexity paraeter
+
+set.seed(42)
+options(digits = 5)
+cv.ct <- rpart(Personal.Loan ~ ., data = train.df, method = "class", 
+               cp = 0.00001, minsplit = 5, xval = 5)
+printcp(cv.ct)
+
+
+# Minimum-error Tree
+pruned.ct <- prune(cv.ct, 
+                   cp = cv.ct$cptable[which.min(cv.ct$cptable[,"xerror"]),"CP"])
+length(pruned.ct$frame$var[pruned.ct$frame$var == "<leaf>"])
+prp(pruned.ct, type = 1, extra = 1, split.font = 1, varlen = -10, box.palette = "RdYl")  
+
+
+# Best-Pruned Tree
+  # minsplit: the minimum number of observations in a node for a split to be attempted
+  # xval: # of folds to use in cross-validation
+
+set.seed(42)
+cv.ct2 <- rpart(Personal.Loan ~ ., data = train.df, method = "class", 
+               cp = 0.00001, minsplit = 1, xval = 5)  
+printcp(cv.ct2)  
+
+  # Print out the cp table of cross-validation errors. 
+    #The R-squared for a regression tree is 1 minus rel error. 
+  # xerror:  (or relative cross-validation error where "x" stands for "cross") 
+    #is a scaled version of overall average of the 5 out-of-sample errors across the 5 folds
+
+pruned.ct2 <- prune(cv.ct2, cp = 0.0154639)
+prp(pruned.ct2, type = 1, extra = 1, under = TRUE, split.font = 1, varlen = -10,
+    box.palette = "RdYl")
+```
+
+
+

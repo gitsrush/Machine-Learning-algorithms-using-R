@@ -1,0 +1,147 @@
+---
+title: "Dimension Reduction"
+output:
+  html_notebook:
+    theme: spacelab
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+date: "`r Sys.Date()`"
+---
+
+**BUAN6356:  RCode Session3 **
+
+### Load packages
+```{r loadPackages, warning=FALSE, message=FALSE, results='hide' }
+#if(!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse, reshape, gplots, ggmap, 
+               mlbench, data.table)
+search()
+theme_set(theme_classic())
+```
+
+### Read in the Data
+```{r readData}
+# Read in Boston Housing data
+data("BostonHousing")
+
+# data.table
+housing.dt <- setDT(BostonHousing)
+housing.dt[, cat.medv := ifelse(medv>30, 1, 0)] # create a categorical variable for home price >30
+housing.dt
+```
+summary(housing.dt) #gives statistics of dataset
+
+### Generate basic stats
+```{r basicStats}
+# Compute Statistics - mean, standard dev, min, max, median, length, and missing values of CRIM
+housing.dt[, .(mean=mean(crim), sd=sd(crim), 
+               minimum=min(crim), maximum=max(crim),
+               median=median(crim)), by=chas]
+is.na(housing.dt) #to check missing variables
+
+  # number of non-missing values of crim variable
+housing.dt[, sum(!is.na(crim))]
+
+  # number of nonmissing variables in a row
+housing.dt[, num_no_miss_vars := rowSums(!is.na(housing.dt))][]
+
+```
+
+
+
+
+```{r corrMatrix}
+# data frame
+housing.df <- setDF(housing.dt)
+drop_var <- c("chas","num_no_miss_vars")
+num.housing.df <- housing.df[, !(names(housing.df) %in% drop_var)]
+num.housing.df
+round(cor(num.housing.df),2)
+
+#round(cor(boston.housing.df),2)
+
+  ### heatmap with values (use 'gplots' package)
+# heatmap.2(cor(num.housing.df), cellnote = round(cor(num.housing.df),2),
+#           dendrogram = "none", key = FALSE, trace = "none", margins = c(10,10),
+#           notecol = "black")
+
+heatmap.2(cor(num.housing.df), dendrogram = "none", 
+          cellnote = round(cor(num.housing.df),2), notecol = "navy", 
+          key = FALSE, trace = "none")
+
+```
+
+
+
+
+```{r freq}
+table(housing.df$chas)
+
+# Frequency Table by multiple categorical variables
+# convert to numerical variable to categorical
+housing.df$rm.bin <- .bincode(housing.df$rm, c(1:9))
+#?.bincode
+
+    ### compute the average of MEDV by (binned) RM and CHAS
+aggregate(housing.df$medv, by=list(rm=housing.df$rm.bin, 
+                                          chas=housing.df$chas), FUN=mean) 
+#?aggregate
+```
+
+
+```{r pivotTable}
+
+mlt <- melt(housing.df, id=c("rm.bin", "chas"), measure=c("medv"))
+mlt
+head(mlt, 5)
+
+# use cast() to reshape data and generate pivot table
+cast(mlt, rm.bin ~ chas, subset=variable=="medv", 
+     margins=c("grand_row", "grand_col"), mean)
+
+
+# Distribution using Barplot (using 'ggmap' package)
+tbl <- table(housing.df$cat.medv, housing.df$zn)
+prop.tbl <- prop.table(tbl, margin=2)
+barplot(prop.tbl, col =c("navy", "orange"), space = 1.5, border = NA, 
+        xlab="ZN", ylab="", yaxt="n", main="Distribution of cat.medv by zn")
+axis(2, at=(seq(0,1, 0.2)), paste(seq(0,100,20), "%"))
+
+
+```
+
+
+### Principal Component Analysis
+
+```{r PCA, warning= FALSE}
+## Read in Cereals data
+cereals.df <- read.csv("Cereals.csv")
+str(cereals.df)
+
+  ### compute PCs on two dimensions
+pcs <- prcomp(data.frame(cereals.df$calories, cereals.df$rating))
+pcs
+summary(pcs) 
+view(pcs)
+pcs$rotation #we want to create weighted avg of the variables, we get weights of the corresponding variables (calories and ratings)
+pcs$rot # rotation matrix
+scores <- pcs$x #weighted avgs(PC1 and PC2 columns in excel)
+head(scores, 5)
+
+  ### PCA on 13 variables
+pcs13 <- prcomp(na.omit(cereals.df[,-c(1:3)])) #omits NA observations after deleting first 3 columns which are not numerical
+summary(pcs13)
+pcs13$rot
+
+  ### PCA using Normalized variables
+pcs.cor <- prcomp(na.omit(cereals.df[,-c(1:3)]), scale. = T) #for standardisaton (see notes) dividing by standard deviation
+summary(pcs.cor)
+pcs.cor$rot
+
+```
+
+  

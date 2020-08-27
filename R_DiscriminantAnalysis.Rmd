@@ -1,0 +1,91 @@
+---
+title: "Discriminant Analysis"
+output: html_notebook
+date: '`r format(Sys.Date(), "%Y-%B-%d")`'
+editor_options: 
+  chunk_output_type: inline
+---
+
+## Linear Discriminant Analysis 
+### using MASS package
+
+```{r loadpackages, warning=FALSE, message=FALSE}
+pacman::p_load(caret, data.table, MASS, ggplot2)
+options(digits = 3)
+knitr::opts_chunk$set(echo = FALSE, fig.width=12, fig.height=6, fig.path = 'Figs/')
+theme_set(theme_classic())
+```
+
+
+__Example 1 - Riding Mower data__  
+```{r ridingMower}
+mowers.df <- fread("RidingMowers.csv")
+
+lda1 <- lda(Ownership~., data = mowers.df)
+lda1
+plot(lda1)
+
+# predict
+pred1 <- predict(lda1, mowers.df)
+pred.sample <- predict(lda1, mowers.df[1:5,])
+names(pred1)  ## "class", "posterior", "x"
+pred1
+
+## class: predicted class
+## posterior: posterior probabilities of belonging to different classes
+## x: linear disriminant values
+
+
+# check model accuracy
+table(pred1$class, mowers.df$Ownership)  # pred v actual
+mean(pred1$class == mowers.df$Ownership)  # percent accurate
+
+sum(pred1$posterior[, 1] >=.5)
+sum(pred1$posterior[, 1] >=.75)  # increase the cut-off from .5 to .75
+
+```
+
+
+__Example 2 - Iris data__  
+
+```{r iris}
+data("iris")
+
+# Split the data into training (80%) and validation/test set (20%)
+set.seed(42)
+training.index <- createDataPartition(iris$Species, p = 0.8, list = FALSE)
+iris.train <- iris[training.index, ]
+iris.valid <- iris[-training.index, ]
+
+# Normalize the data
+    # Estimate preprocessing parameters
+norm.values  <- preProcess(iris.train, method = c("center", "scale"))
+    # Transform the data using the estimated parameters
+iris.train.norm <- predict(norm.values, iris.train)
+iris.valid.norm <- predict(norm.values, iris.valid)
+  
+
+lda2 <- lda(Species~., data = iris.train.norm)
+lda2
+
+
+# Predict - using Training data and plot
+pred2.train <- predict(lda2, iris.train.norm)
+
+# Generate LDA plot
+lda2.plot <- cbind(iris.train.norm, predict(lda2)$x)
+ggplot(lda2.plot, aes(LD1, LD2)) +
+  geom_point(aes(color = Species))
+
+
+# Predict - using Validation data
+pred2.valid <- predict(lda2, iris.valid.norm)
+pred2.valid
+names(pred2.valid)
+
+# Confusion matrix
+acc1 <- table(pred2.valid$class, iris.valid.norm$Species)  # pred v actual
+confusionMatrix(acc1)
+
+```
+
